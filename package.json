@@ -1,0 +1,43 @@
+{
+  "name": "smart-compliance-system",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "client",
+    "server",
+    "database",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "dev:server": "npm run dev --workspace=server",
+    "build": "npm run build --workspace=server && npm run build --workspace=client",
+    "lint": "npm run lint --workspace=server && npm run lint --workspace=client",
+    "format": "npm run format --workspace=server && npm run format --workspace=client",
+    "prisma:migrate": "npm run migrate --workspace=database",
+    "prisma:seed": "npm run seed --workspace=database"
+  },
+  "description": "",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abizer007/Smart-Compliance-Deviation-Tracking-System.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/abizer007/Smart-Compliance-Deviation-Tracking-System/issues"
+  },
+  "homepage": "https://github.com/abizer007/Smart-Compliance-Deviation-Tracking-System#readme",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "prisma": "^7.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "@prisma/client": "^5.15.0",
+    "bcryptjs": "^2.4.3"
+  }
+}
