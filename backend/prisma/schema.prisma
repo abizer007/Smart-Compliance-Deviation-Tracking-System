@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  role         String         @default("EMPLOYEE") // EMPLOYEE, PROCESS_OWNER, COMPLIANCE_MANAGER, AUDITOR, ADMIN
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  sops         SOP[]
+  deviations   Deviation[]    @relation("ReportingUser")
+  capas        Capa[]         @relation("CapaOwner")
+  comments     Comment[]
+  audits       Audit[]        @relation("Auditor")
+  activities   ActivityLog[]
+}
+
+model SOP {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  department  String
+  createdById String
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  versions    SOPVersion[]
+  deviations  Deviation[]
+}
+
+model SOPVersion {
+  id        String   @id @default(uuid())
+  sopId     String
+  sop       SOP      @relation(fields: [sopId], references: [id])
+  content   String
+  version   Int
+  createdAt DateTime @default(now())
+}
+
+model Deviation {
+  id           String         @id @default(uuid())
+  title        String
+  description  String
+  department   String
+  severity     String         // LOW, MEDIUM, HIGH, CRITICAL
+  status       String         @default("REPORTED") // REPORTED, UNDER_REVIEW, CAPA_ASSIGNED, RESOLVED, CLOSED
+  sopId        String?
+  sop          SOP?           @relation(fields: [sopId], references: [id])
+  reportedById String
+  reportedBy   User           @relation("ReportingUser", fields: [reportedById], references: [id])
+  capas        Capa[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  findings     AuditFinding[]
+}
+
+model Capa {
+  id          String     @id @default(uuid())
+  deviationId String
+  deviation   Deviation  @relation(fields: [deviationId], references: [id])
+  ownerId     String
+  owner       User       @relation("CapaOwner", fields: [ownerId], references: [id])
+  action      String
+  deadline    DateTime
+  status      String     @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, OVERDUE
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Audit {
+  id         String         @id @default(uuid())
+  name       String
+  department String
+  date       DateTime
+  auditorId  String
+  auditor    User           @relation("Auditor", fields: [auditorId], references: [id])
+  status     String         @default("SCHEDULED") // SCHEDULED, IN_PROGRESS, COMPLETED
+  findings   AuditFinding[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model AuditFinding {
+  id          String     @id @default(uuid())
+  auditId     String
+  audit       Audit      @relation(fields: [auditId], references: [id])
+  finding     String
+  deviationId String?
+  deviation   Deviation? @relation(fields: [deviationId], references: [id])
+  createdAt   DateTime   @default(now())
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  entityType String   // DEVIATION, CAPA, AUDIT
+  entityId   String
+  content    String
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  message   String
+  read      Boolean  @default(false)
+  link      String?  
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  timestamp  DateTime @default(now())
+}
