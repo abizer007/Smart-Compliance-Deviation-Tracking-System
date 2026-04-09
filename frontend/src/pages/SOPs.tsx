@@ -1,138 +1,170 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/axios';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Modal } from '@/components/ui/modal';
-import { FileText, Plus, File, Loader2 } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { FileText, Plus, Loader2, Trash2, Edit, File } from 'lucide-react';
+
+const SELECT_CLASS = "form-select";
 
 export default function SOPs() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ title: '', description: '', department: 'IT', content: '' });
-  const queryClient = useQueryClient();
-  const { data: sops, isLoading } = useQuery({
-    queryKey: ['sops'],
-    queryFn: async () => {
-      const res = await api.get('/sop');
-      return res.data;
-    }
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingSopId, setEditingSopId] = useState<string | null>(null);
+  const [form, setForm] = useState({ title: '', description: '', department: 'IT', content: '' });
+  const [editForm, setEditForm] = useState({ content: '' });
+  const qc = useQueryClient();
+
+  const { data: sops, isLoading } = useQuery({ queryKey: ['sops'], queryFn: async () => (await api.get('/sop')).data });
+
+  const createMutation = useMutation({
+    mutationFn: async (d: any) => (await api.post('/sop', d)).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sops'] }); setIsModalOpen(false); setForm({ title: '', description: '', department: 'IT', content: '' }); },
   });
 
-  const mutation = useMutation({
-    mutationFn: async (newSOP: any) => {
-      const res = await api.post('/sop', newSOP);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sops'] });
-      setIsModalOpen(false);
-      setFormData({ title: '', description: '', department: 'IT', content: '' });
-    }
+  const editMutation = useMutation({
+    mutationFn: async (p: { id: string; d: any }) => (await api.post(`/sop/${p.id}/versions`, p.d)).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sops'] }); setIsEditModalOpen(false); setEditingSopId(null); setEditForm({ content: '' }); },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    mutation.mutate(formData);
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/sop/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sops'] }),
+  });
+
+  const openEdit = (sop: any) => {
+    setEditingSopId(sop.id);
+    setEditForm({ content: sop.versions?.[0]?.content ?? '' });
+    setIsEditModalOpen(true);
   };
 
-  if (isLoading) return <div className="animate-pulse p-8">Gathering SOPs...</div>;
+  if (isLoading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      {[...Array(3)].map((_, i) => <div key={i} className="loading-shimmer" style={{ height: 56 }} />)}
+    </div>
+  );
+
+  const DEPT_COLORS: Record<string, string> = { IT: '#6366f1', Finance: '#f59e0b', HR: '#ec4899', Operations: '#14b8a6', Quality: '#22c55e' };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-center">
-         <h2 className="text-3xl font-bold tracking-tight">Standard Operating Procedures</h2>
-         <Button onClick={() => setIsModalOpen(true)} className="bg-primary hover:bg-primary/90">
-           <Plus className="h-4 w-4 mr-2" /> New SOP
-         </Button>
+    <div style={{ maxWidth: 900, margin: '0 auto', animation: 'fadeSlideUp 0.4s both' }}>
+      <div className="page-header">
+        <div>
+          <h2 className="page-title">Standard Operating Procedures <span className="count">{sops?.length ?? 0}</span></h2>
+          <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'hsl(215,16%,50%)' }}>All company-wide compliance documents.</p>
+        </div>
+        <Button onClick={() => setIsModalOpen(true)} style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', color: '#fff', borderRadius: '0.625rem', padding: '0 1rem', height: 38, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' }}>
+          <Plus size={15} /> New SOP
+        </Button>
       </div>
 
-      <Card className="border-border shadow-sm">
-        <CardHeader className="bg-muted/50 border-b p-4">
-           <div className="flex items-center gap-2">
-             <FileText className="h-5 w-5 text-muted-foreground" />
-             <CardTitle className="text-sm font-medium">abizer007 / compliance-sops</CardTitle>
-           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[300px]">Name</TableHead>
-                <TableHead>Latest Commit</TableHead>
-                <TableHead className="text-right">Last Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sops?.map((sop: any) => (
-                <TableRow key={sop.id}>
-                  <TableCell className="font-medium flex items-center gap-2">
-                    <File className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-primary hover:underline cursor-pointer">{sop.title}</span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground truncate max-w-[200px]">
-                     {sop.description}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {new Date(sop.updatedAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {sops?.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">No SOPs found. Create one.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Document list */}
+      <div style={{ background: '#fff', border: '1px solid hsl(220,13%,90%)', borderRadius: '1rem', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+        {/* Repo header */}
+        <div style={{ padding: '0.875rem 1.25rem', borderBottom: '1px solid hsl(220,13%,91%)', background: 'hsl(220,25%,98%)', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <FileText size={15} color="#6366f1" />
+          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'hsl(224,71%,10%)' }}>compliance-hub / sops</span>
+          <span style={{ fontSize: '0.75rem', fontWeight: 500, padding: '0.1rem 0.5rem', borderRadius: '9999px', background: '#f0f0ff', color: '#6366f1', border: '1px solid #e0e0ff' }}>{sops?.length ?? 0} documents</span>
+        </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create New SOP" description="Add a new standard operating procedure to the tracking system.">
-         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            <div className="space-y-2">
-               <Label htmlFor="title">Document Title</Label>
-               <Input id="title" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="e.g. Safety Data Handling V2" />
+        {sops?.map((sop: any, i: number) => {
+          const deptColor = DEPT_COLORS[sop.department] ?? '#6b7280';
+          const latestVersion = sop.versions?.[0]?.version ?? 1;
+          return (
+            <div key={sop.id} style={{
+              display: 'flex', alignItems: 'center', gap: '0.875rem',
+              padding: '0.875rem 1.25rem',
+              borderBottom: i < sops.length - 1 ? '1px solid hsl(220,13%,93%)' : 'none',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'hsl(220,25%,98.5%)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <File size={16} color="#94a3b8" style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#6366f1', cursor: 'pointer' }}
+                    onMouseEnter={e => ((e.target as HTMLElement).style.textDecoration = 'underline')}
+                    onMouseLeave={e => ((e.target as HTMLElement).style.textDecoration = 'none')}>
+                    {sop.title}
+                  </span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: '0.25rem', background: `${deptColor}15`, color: deptColor, border: `1px solid ${deptColor}30` }}>{sop.department}</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: '0.25rem', background: 'hsl(220,14%,94%)', color: 'hsl(215,16%,45%)' }}>v{latestVersion}</span>
+                </div>
+                <p style={{ margin: '0.2rem 0 0', fontSize: '0.7rem', color: 'hsl(215,16%,55%)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sop.description}</p>
+              </div>
+              <span style={{ fontSize: '0.7rem', color: 'hsl(215,16%,55%)', white_space: 'nowrap', flexShrink: 0 }}>{new Date(sop.updatedAt).toLocaleDateString()}</span>
+              <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                <button onClick={() => openEdit(sop)} style={{ width: 30, height: 30, borderRadius: '0.375rem', border: '1px solid hsl(220,13%,89%)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'hsl(215,16%,50%)', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#6366f1'; (e.currentTarget as HTMLButtonElement).style.color = '#6366f1'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'hsl(220,13%,89%)'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(215,16%,50%)' }}>
+                  <Edit size={13} />
+                </button>
+                <button onClick={() => deleteMutation.mutate(sop.id)} style={{ width: 30, height: 30, borderRadius: '0.375rem', border: '1px solid hsl(220,13%,89%)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'hsl(215,16%,50%)', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'hsl(220,13%,89%)'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(215,16%,50%)'; (e.currentTarget as HTMLButtonElement).style.background = '#fff'; }}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <select 
-                     id="department" 
-                     value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}
-                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                     <option value="IT">IT</option>
-                     <option value="Finance">Finance</option>
-                     <option value="HR">HR</option>
-                     <option value="Operations">Operations</option>
-                     <option value="Quality">Quality</option>
-                  </select>
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="description">Short Description</Label>
-                  <Input id="description" required value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Brief overview" />
-               </div>
+          );
+        })}
+        {sops?.length === 0 && (
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'hsl(215,16%,55%)' }}>
+            <FileText size={36} style={{ opacity: 0.15, margin: '0 auto 0.75rem', display: 'block' }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>No SOPs yet</p>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem' }}>Create your first standard operating procedure.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Create Modal */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create New SOP" description="Add a new standard operating procedure.">
+        <form onSubmit={e => { e.preventDefault(); createMutation.mutate(form); }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+          <div>
+            <Label htmlFor="sop-title">Document Title</Label>
+            <Input id="sop-title" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="e.g. Safety Data Handling V2" style={{ marginTop: '0.375rem' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <Label>Department</Label>
+              <select value={form.department} onChange={e => setForm({...form, department: e.target.value})} className={SELECT_CLASS} style={{ marginTop: '0.375rem' }}>
+                {['IT','Finance','HR','Operations','Quality'].map(d => <option key={d}>{d}</option>)}
+              </select>
             </div>
-            <div className="space-y-2">
-               <Label htmlFor="content">Initial Content (Markdown supported)</Label>
-               <textarea 
-                  id="content" required 
-                  value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})}
-                  className="flex min-h-[150px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="# Introduction..."
-               />
+            <div>
+              <Label htmlFor="sop-desc">Short Description</Label>
+              <Input id="sop-desc" required value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Brief overview" style={{ marginTop: '0.375rem' }} />
             </div>
-            <div className="flex justify-end pt-4 gap-2">
-               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-               <Button type="submit" disabled={mutation.isPending}>
-                 {mutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                 Create SOP
-               </Button>
-            </div>
-         </form>
+          </div>
+          <div>
+            <Label htmlFor="sop-content">Initial Content (Markdown)</Label>
+            <textarea id="sop-content" required value={form.content} onChange={e => setForm({...form, content: e.target.value})} className="form-textarea mono" style={{ minHeight: 140, marginTop: '0.375rem' }} placeholder="# Introduction&#10;..." />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
+            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={createMutation.isPending} style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', color: '#fff' }}>
+              {createMutation.isPending && <Loader2 size={13} className="animate-spin" style={{ marginRight: 6 }} />} Create SOP
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit SOP" description="Update the content to create a new version.">
+        <form onSubmit={e => { e.preventDefault(); if (editingSopId) editMutation.mutate({ id: editingSopId, d: editForm }); }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+          <div>
+            <Label>SOP Content (Markdown)</Label>
+            <textarea required value={editForm.content} onChange={e => setEditForm({ content: e.target.value })} className="form-textarea mono" style={{ minHeight: 280, marginTop: '0.375rem' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
+            <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={editMutation.isPending} style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', color: '#fff' }}>
+              {editMutation.isPending && <Loader2 size={13} className="animate-spin" style={{ marginRight: 6 }} />} Update SOP
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

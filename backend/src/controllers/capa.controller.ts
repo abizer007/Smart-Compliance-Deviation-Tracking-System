@@ -38,12 +38,17 @@ export const createCapa = async (req: AuthRequest, res: Response) => {
   try {
     const { deviationId, ownerId, action, deadline } = req.body;
 
+    const parsedDate = new Date(deadline);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid deadline date format.' });
+    }
+
     const capa = await prisma.capa.create({
       data: {
         deviationId,
         ownerId,
         action,
-        deadline: new Date(deadline),
+        deadline: parsedDate,
       }
     });
 

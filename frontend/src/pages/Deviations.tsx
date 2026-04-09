@@ -1,168 +1,171 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/axios';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Modal } from '@/components/ui/modal';
-import { AlertCircle, Plus, Loader2 } from 'lucide-react';
+import { AlertCircle, Plus, Loader2, Circle, CheckCircle2 } from 'lucide-react';
+
+const SEVERITY_META: Record<string, { label: string; cls: string; dot: string }> = {
+  CRITICAL: { label: 'Critical', cls: 'severity-critical', dot: '#7c3aed' },
+  HIGH:     { label: 'High',     cls: 'severity-high',     dot: '#ef4444' },
+  MEDIUM:   { label: 'Medium',   cls: 'severity-medium',   dot: '#f59e0b' },
+  LOW:      { label: 'Low',      cls: 'severity-low',      dot: '#22c55e' },
+};
+
+const STATUS_META: Record<string, { color: string; bg: string; label: string }> = {
+  REPORTED:      { color: '#2563eb', bg: '#eff6ff',  label: 'Reported' },
+  UNDER_REVIEW:  { color: '#d97706', bg: '#fffbeb',  label: 'Under Review' },
+  CAPA_ASSIGNED: { color: '#7c3aed', bg: '#f5f3ff',  label: 'CAPA Assigned' },
+  RESOLVED:      { color: '#16a34a', bg: '#f0fdf4',  label: 'Resolved' },
+  CLOSED:        { color: '#6b7280', bg: '#f9fafb',  label: 'Closed' },
+};
+
+const SELECT_CLASS = "form-select";
+const TEXTAREA_CLASS = "form-textarea";
 
 export default function Deviations() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ title: '', description: '', department: 'IT', severity: 'LOW' });
-  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ title: '', description: '', department: 'IT', severity: 'LOW' });
+  const qc = useQueryClient();
 
   const { data: deviations, isLoading } = useQuery({
     queryKey: ['deviations'],
-    queryFn: async () => {
-      const res = await api.get('/deviation');
-      return res.data;
-    }
+    queryFn: async () => (await api.get('/deviation')).data,
   });
 
   const mutation = useMutation({
-    mutationFn: async (newDeviation: any) => {
-      const res = await api.post('/deviation', newDeviation);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deviations'] });
-      setIsModalOpen(false);
-      setFormData({ title: '', description: '', department: 'IT', severity: 'LOW' });
-    }
+    mutationFn: async (d: any) => (await api.post('/deviation', d)).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deviations'] }); setIsModalOpen(false); setForm({ title: '', description: '', department: 'IT', severity: 'LOW' }); },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    mutation.mutate(formData);
-  };
+  if (isLoading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {[...Array(3)].map((_, i) => <div key={i} className="loading-shimmer" style={{ height: 88 }} />)}
+    </div>
+  );
 
-  if (isLoading) return <div className="animate-pulse p-8 flex items-center gap-2">Gathering intelligence...</div>;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'REPORTED': return 'default';
-      case 'UNDER_REVIEW': return 'warning';
-      case 'CAPA_ASSIGNED': return 'destructive';
-      case 'RESOLVED': return 'success';
-      case 'CLOSED': return 'secondary';
-      default: return 'outline';
-    }
-  };
-
-  const getSeverityBadge = (severity: string) => {
-    if (severity === 'CRITICAL') return <Badge variant="destructive">Critical</Badge>;
-    if (severity === 'HIGH') return <Badge variant="destructive" className="bg-orange-500">High</Badge>;
-    if (severity === 'MEDIUM') return <Badge variant="warning">Medium</Badge>;
-    return <Badge variant="secondary">Low</Badge>;
-  };
+  const open   = deviations?.filter((d: any) => d.status !== 'CLOSED').length ?? 0;
+  const closed = deviations?.filter((d: any) => d.status === 'CLOSED').length ?? 0;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-center">
-         <div className="flex items-center gap-2">
-           <AlertCircle className="h-6 w-6 text-primary" />
-           <h2 className="text-3xl font-bold tracking-tight">Issues <span className="text-muted-foreground text-xl bg-muted px-2 py-0.5 rounded-full">{deviations?.length || 0}</span></h2>
-         </div>
-         <Button onClick={() => setIsModalOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm">
-           <Plus className="h-4 w-4 mr-2" /> New Deviation
-         </Button>
+    <div style={{ maxWidth: 900, margin: '0 auto', animation: 'fadeSlideUp 0.4s both' }}>
+
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <h2 className="page-title">
+            Deviations
+            <span className="count">{deviations?.length ?? 0}</span>
+          </h2>
+          <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'hsl(215,16%,50%)' }}>
+            <span style={{ color: '#16a34a', fontWeight: 600 }}>{open}</span> open &nbsp;·&nbsp;
+            <span style={{ color: '#6b7280', fontWeight: 600 }}>{closed}</span> closed
+          </p>
+        </div>
+        <Button onClick={() => setIsModalOpen(true)} style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', color: '#fff', borderRadius: '0.625rem', padding: '0 1rem', height: 38, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' }}>
+          <Plus size={15} /> Report Deviation
+        </Button>
       </div>
 
-      <Card className="border-border shadow-sm">
-        <div className="bg-muted/50 border-b p-4 text-sm font-medium flex items-center justify-between">
-           <div className="flex items-center gap-4">
-              <span className="text-foreground">{deviations?.filter((d: any) => d.status !== 'CLOSED').length} Open</span>
-              <span className="text-muted-foreground">{deviations?.filter((d: any) => d.status === 'CLOSED').length} Closed</span>
-           </div>
-        </div>
-        <CardContent className="p-0 flex flex-col divide-y divide-border">
-          {deviations?.map((dev: any) => (
-            <div key={dev.id} className="p-4 hover:bg-muted/30 transition-colors flex items-start gap-3">
-               <AlertCircle className={`h-5 w-5 mt-0.5 ${dev.status === 'CLOSED' ? 'text-purple-500' : 'text-green-500'}`} />
-               <div className="flex flex-col gap-1 w-full">
-                  <div className="flex items-start justify-between">
-                     <span className="font-semibold text-base hover:text-primary cursor-pointer">{dev.title}</span>
-                     {getSeverityBadge(dev.severity)}
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mt-1">
-                     <span>#{dev.id.substring(0, 8)} opened on {new Date(dev.createdAt).toLocaleDateString()} by {dev.reportedBy.name}</span>
-                     <span>•</span>
-                     <Badge variant={getStatusColor(dev.status) as any} className="text-[10px] px-1.5 py-0 leading-none h-4 rounded-sm">{dev.status.replace('_', ' ')}</Badge>
-                     {dev.sop && (
-                       <>
-                         <span>•</span>
-                         <span className="flex items-center gap-1"><span className="opacity-70">SOP:</span> {dev.sop.title}</span>
-                       </>
-                     )}
-                  </div>
-               </div>
-            </div>
+      {/* List */}
+      <div style={{ background: '#fff', border: '1px solid hsl(220,13%,90%)', borderRadius: '1rem', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+        {/* Tabs bar */}
+        <div style={{ display: 'flex', gap: '1.5rem', padding: '0 1.25rem', borderBottom: '1px solid hsl(220,13%,90%)', background: 'hsl(220,25%,98%)' }}>
+          {[
+            { label: `${open} Open`, active: true },
+            { label: `${closed} Closed`, active: false },
+          ].map(t => (
+            <div key={t.label} style={{
+              padding: '0.75rem 0', fontSize: '0.8125rem', fontWeight: 600,
+              color: t.active ? '#6366f1' : 'hsl(215,16%,50%)',
+              borderBottom: t.active ? '2px solid #6366f1' : '2px solid transparent',
+              cursor: 'pointer', userSelect: 'none',
+            }}>{t.label}</div>
           ))}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {deviations?.map((dev: any, i: number) => {
+            const sev = SEVERITY_META[dev.severity] ?? SEVERITY_META.LOW;
+            const sta = STATUS_META[dev.status] ?? STATUS_META.REPORTED;
+            const isClosed = dev.status === 'CLOSED' || dev.status === 'RESOLVED';
+            return (
+              <div key={dev.id} style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.875rem',
+                padding: '1rem 1.25rem',
+                borderBottom: i < deviations.length - 1 ? '1px solid hsl(220,13%,93%)' : 'none',
+                transition: 'background 0.1s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'hsl(220,25%,98.5%)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                {isClosed
+                  ? <CheckCircle2 size={18} style={{ color: '#16a34a', marginTop: 2, flexShrink: 0 }} />
+                  : <Circle size={18} style={{ color: '#6366f1', marginTop: 2, flexShrink: 0 }} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'hsl(224,71%,8%)' }}>{dev.title}</span>
+                    <span className={`badge-pill ${sev.cls}`}>{sev.label}</span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '9999px', background: sta.bg, color: sta.color }}>
+                      {sta.label}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'hsl(215,16%,55%)', display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', background: 'hsl(220,14%,94%)', padding: '0 0.3rem', borderRadius: '0.25rem' }}>#{dev.id.substring(0, 8)}</span>
+                    <span>opened {new Date(dev.createdAt).toLocaleDateString()} by</span>
+                    <span style={{ fontWeight: 600, color: 'hsl(215,16%,40%)' }}>{dev.reportedBy?.name}</span>
+                    {dev.sop && <><span>·</span><span>SOP: {dev.sop.title}</span></>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
           {deviations?.length === 0 && (
-            <div className="p-12 flex flex-col items-center justify-center text-muted-foreground">
-               <AlertCircle className="h-12 w-12 mb-4 opacity-20" />
-               <p className="text-lg font-medium">No deviations reported</p>
-               <p className="text-sm">When deviations are reported, you'll see them here.</p>
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'hsl(215,16%,55%)' }}>
+              <AlertCircle size={36} style={{ opacity: 0.2, margin: '0 auto 0.75rem' }} />
+              <p style={{ margin: 0, fontWeight: 600 }}>No deviations reported</p>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem' }}>When deviations are reported, they will appear here.</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
+      {/* Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Report New Deviation" description="Log a new compliance deviation or issue.">
-         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            <div className="space-y-2">
-               <Label htmlFor="title">Title</Label>
-               <Input id="title" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Brief description of the issue" />
+        <form onSubmit={e => { e.preventDefault(); mutation.mutate(form); }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+          <div>
+            <Label htmlFor="dev-title">Title</Label>
+            <Input id="dev-title" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Brief description of the issue" style={{ marginTop: '0.375rem' }} />
+          </div>
+          <div>
+            <Label htmlFor="dev-desc">Detailed Description</Label>
+            <textarea id="dev-desc" required value={form.description} onChange={e => setForm({...form, description: e.target.value})} className={TEXTAREA_CLASS} style={{ minHeight: 90, marginTop: '0.375rem' }} placeholder="Explain what happened in detail..." />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <Label htmlFor="dev-dept">Department</Label>
+              <select id="dev-dept" value={form.department} onChange={e => setForm({...form, department: e.target.value})} className={SELECT_CLASS} style={{ marginTop: '0.375rem' }}>
+                {['IT','Finance','HR','Operations','Quality'].map(d => <option key={d}>{d}</option>)}
+              </select>
             </div>
-            <div className="space-y-2">
-               <Label htmlFor="description">Detailed Description</Label>
-               <textarea 
-                  id="description" required 
-                  value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
-                  className="flex min-h-[100px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Explain what happened in detail..."
-               />
+            <div>
+              <Label htmlFor="dev-sev">Severity</Label>
+              <select id="dev-sev" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})} className={SELECT_CLASS} style={{ marginTop: '0.375rem' }}>
+                <option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="CRITICAL">Critical</option>
+              </select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <select 
-                     id="department" 
-                     value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})}
-                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                     <option value="IT">IT</option>
-                     <option value="Finance">Finance</option>
-                     <option value="HR">HR</option>
-                     <option value="Operations">Operations</option>
-                     <option value="Quality">Quality</option>
-                  </select>
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="severity">Severity</Label>
-                  <select 
-                     id="severity" 
-                     value={formData.severity} onChange={e => setFormData({...formData, severity: e.target.value})}
-                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                     <option value="LOW">Low</option>
-                     <option value="MEDIUM">Medium</option>
-                     <option value="HIGH">High</option>
-                     <option value="CRITICAL">Critical</option>
-                  </select>
-               </div>
-            </div>
-            <div className="flex justify-end pt-4 gap-2">
-               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-               <Button type="submit" disabled={mutation.isPending}>
-                 {mutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                 Submit Report
-               </Button>
-            </div>
-         </form>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.5rem' }}>
+            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending} style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', color: '#fff' }}>
+              {mutation.isPending && <Loader2 size={13} className="animate-spin" style={{ marginRight: 6 }} />} Submit Report
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

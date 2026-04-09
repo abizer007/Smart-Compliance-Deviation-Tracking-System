@@ -93,3 +93,22 @@ export const updateSOPContent = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: 'Failed to update SOP content' });
   }
 };
+
+export const deleteSOP = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Have to delete dependencies first if there are any (SOP versions)
+    await prisma.sOPVersion.deleteMany({
+      where: { sopId: id }
+    });
+
+    await prisma.sOP.delete({
+       where: { id }
+    });
+
+    res.status(200).json({ message: 'SOP deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete SOP' });
+  }
+};
